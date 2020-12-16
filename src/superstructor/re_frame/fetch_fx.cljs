@@ -145,6 +145,11 @@
 (def request-id->js-abort-controller
   (atom {}))
 
+(defn handle-response [handler response]
+  (if (fn? handler)
+    (handler response)
+    (dispatch (conj handler response))))
+
 (defn body-success-handler
   [{:as   request
     :keys [request-id on-success on-failure]
@@ -159,8 +164,8 @@
                     :body   body
                     :reader reader-kw)]
     (if (:ok? response')
-      (dispatch (conj on-success response'))
-      (dispatch (conj on-failure (assoc response' :problem :server))))))
+      (handle-response on-success response')
+      (handle-response on-failure (assoc response' :problem :server)))))
 
 (defn body-problem-handler
   [{:as   request
@@ -173,7 +178,7 @@
                           :problem         :body
                           :reader          reader-kw
                           :problem-message problem-message)]
-    (dispatch (conj on-failure response'))))
+    (handle-response on-failure response')))
 
 (defn response-success-handler
   "Reads the js/Response JavaScript Object stream to completion. Returns nil."
@@ -197,9 +202,9 @@
   (swap! request-id->js-abort-controller #(dissoc %1 %2) request-id)
   (let [problem         (if (= :timeout js-error) :timeout :fetch)
         problem-message (if (= :timeout js-error) "Fetch timed out" (obj/get js-error "message"))]
-    (dispatch (conj on-failure
-                    {:problem         problem
-                     :problem-message problem-message}))))
+    (handle-response on-failure
+                     {:problem         problem
+                      :problem-message problem-message})))
 
 (defn fetch
   "Initialise the request. Returns nil."
